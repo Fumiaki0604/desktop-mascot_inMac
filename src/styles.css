@@ -1,0 +1,293 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: transparent;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+#app {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+}
+
+/* マスコット画像エリア */
+#mascot-container {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  width: 150px;
+  height: 150px;
+  cursor: move;
+}
+
+#mascot-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* デフォルトマスコット（画像未設定時） */
+#default-mascot {
+  width: 100px;
+  height: 100px;
+  margin: 25px;
+  background: white;
+  border-radius: 50%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#default-mascot::after {
+  content: 'MASCOT';
+  font-size: 14px;
+  font-weight: bold;
+  color: black;
+}
+
+/* 吹き出しエリア */
+#bubble-container {
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 420px;
+}
+
+#bubble {
+  background: rgba(0, 0, 0, 0.85);
+  border: 2px solid rgba(100, 100, 100, 0.8);
+  border-radius: 15px;
+  padding: 15px;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+}
+
+#bubble-content {
+  display: flex;
+  gap: 10px;
+  flex: 1;
+  margin-bottom: 10px;
+}
+
+#thumbnail-container {
+  width: 100px;
+  height: 75px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+#thumbnail-container img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+#text-container {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+}
+
+#article-text {
+  color: white;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+}
+
+#open-link-btn {
+  background: rgba(0, 255, 0, 1);
+  border: 2px solid rgba(0, 200, 0, 1);
+  color: black;
+  font-weight: bold;
+  padding: 5px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  width: 100px;
+  font-size: 12px;
+}
+
+#open-link-btn:hover {
+  background: rgba(0, 200, 0, 1);
+}
+
+#open-link-btn:active {
+  background: rgba(0, 150, 0, 1);
+}
+
+/* 画像選択ボタン */
+#select-image-btn {
+  position: absolute;
+  bottom: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(100, 100, 100, 0.5);
+  color: black;
+  padding: 3px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+#select-image-btn:hover {
+  background: rgba(255, 255, 255, 1);
+}
+
+/* 設定ボタン */
+#settings-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(100, 100, 100, 0.5);
+  color: black;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+#settings-btn:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+/* 設定ダイアログ */
+#settings-dialog {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+#settings-content {
+  background: rgba(40, 40, 40, 0.95);
+  border: 2px solid rgba(100, 100, 100, 0.8);
+  border-radius: 10px;
+  padding: 20px;
+  width: 400px;
+  color: white;
+}
+
+#settings-content h2 {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  color: white;
+}
+
+.settings-section {
+  margin-bottom: 15px;
+}
+
+.settings-section label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.settings-section input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid rgba(100, 100, 100, 0.5);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  font-size: 13px;
+}
+
+.settings-section input:focus {
+  outline: none;
+  border-color: rgba(0, 255, 0, 0.8);
+}
+
+.settings-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.settings-buttons button {
+  padding: 8px 20px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 13px;
+  border: 1px solid rgba(100, 100, 100, 0.5);
+}
+
+#save-settings-btn {
+  background: rgba(0, 255, 0, 1);
+  color: black;
+  font-weight: bold;
+  border-color: rgba(0, 200, 0, 1);
+}
+
+#save-settings-btn:hover {
+  background: rgba(0, 200, 0, 1);
+}
+
+#cancel-settings-btn {
+  background: rgba(100, 100, 100, 0.5);
+  color: white;
+}
+
+#cancel-settings-btn:hover {
+  background: rgba(120, 120, 120, 0.7);
+}
+
+/* 右クリックメニュー */
+#context-menu {
+  position: fixed;
+  background: rgba(40, 40, 40, 0.95);
+  border: 1px solid rgba(100, 100, 100, 0.8);
+  border-radius: 5px;
+  padding: 5px 0;
+  min-width: 150px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  z-index: 2000;
+}
+
+.context-menu-item {
+  padding: 8px 15px;
+  color: white;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.context-menu-item:hover {
+  background: rgba(0, 255, 0, 0.3);
+}
+
+.context-menu-separator {
+  height: 1px;
+  background: rgba(100, 100, 100, 0.5);
+  margin: 5px 0;
+}

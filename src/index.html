@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Desktop Mascot</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- マスコット画像エリア -->
+    <div id="mascot-container" data-tauri-drag-region>
+      <img id="mascot-image" src="" alt="Mascot" style="display: none;">
+      <div id="default-mascot"></div>
+      <button id="select-image-btn">画像選択</button>
+    </div>
+
+    <!-- 吹き出しエリア -->
+    <div id="bubble-container">
+      <div id="bubble">
+        <div id="bubble-content">
+          <div id="thumbnail-container"></div>
+          <div id="text-container">
+            <div id="article-text">デスクトップマスコットへようこそ</div>
+          </div>
+        </div>
+        <button id="open-link-btn">記事を開く</button>
+      </div>
+    </div>
+
+    <!-- 設定ダイアログ -->
+    <div id="settings-dialog" style="display: none;">
+      <div id="settings-content">
+        <h2>設定</h2>
+        <div class="settings-section">
+          <label for="rss-feed-input">RSSフィードURL:</label>
+          <input type="text" id="rss-feed-input" placeholder="https://example.com/rss.xml">
+        </div>
+        <div class="settings-buttons">
+          <button id="save-settings-btn">保存</button>
+          <button id="cancel-settings-btn">キャンセル</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 設定ボタン -->
+    <button id="settings-btn">⚙</button>
+
+    <!-- 右クリックメニュー -->
+    <div id="context-menu" style="display: none;">
+      <div class="context-menu-item" id="menu-settings">設定</div>
+      <div class="context-menu-item" id="menu-select-image">画像変更</div>
+      <div class="context-menu-separator"></div>
+      <div class="context-menu-item" id="menu-exit">終了</div>
+    </div>
+  </div>
+
+  <script src="main.js" type="module"></script>
+</body>
+</html>

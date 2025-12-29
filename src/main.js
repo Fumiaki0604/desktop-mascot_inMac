@@ -12,7 +12,76 @@ let articles = [
 ];
 let currentIndex = 0;
 
+// 音声再生用のAudioコンテキスト
+let currentAudio = null;
+let lipSyncInterval = null;
+let mouthImages = []; // 口パク用画像パスのリスト
+let blinkInterval = null;
+let blinkImagePath = null; // 瞬き用画像パス
+let transitionGifPath = null; // 記事切り替え時のGIFパス
+let hopInterval = null; // ホップアニメーション用タイマー
+
 function setupEventListeners() {
+  // 読み上げボタン
+  const speakBtn = document.getElementById('speak-btn');
+  if (speakBtn) {
+    speakBtn.addEventListener('click', async () => {
+      const article = articles[currentIndex];
+      if (!article) return;
+
+      // 既に再生中の音声があれば停止
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
+        stopLipSync();
+      }
+
+      try {
+        speakBtn.textContent = '合成中...';
+        speakBtn.disabled = true;
+
+        // タイトルと説明を結合して読み上げ
+        const textToSpeak = `${article.title}。${article.description}`;
+        const speakerId = parseInt(localStorage.getItem('voicevoxSpeakerId') || '1');
+
+        // VOICEVOX APIで音声合成
+        const audioData = await invoke('synthesize_speech', {
+          text: textToSpeak,
+          speakerId: speakerId
+        });
+
+        // Base64デコード不要、直接Blob作成
+        const blob = new Blob([new Uint8Array(audioData)], { type: 'audio/wav' });
+        const audioUrl = URL.createObjectURL(blob);
+
+        currentAudio = new Audio(audioUrl);
+        currentAudio.play();
+
+        speakBtn.textContent = '再生中...';
+
+        // リップシンクアニメーション開始
+        startLipSync();
+
+        currentAudio.addEventListener('ended', () => {
+          URL.revokeObjectURL(audioUrl);
+          speakBtn.textContent = '読み上げ';
+          speakBtn.disabled = false;
+          currentAudio = null;
+
+          // リップシンクアニメーション停止
+          stopLipSync();
+        });
+
+      } catch (error) {
+        console.error('Speech synthesis failed:', error);
+        alert(`音声合成に失敗しました: ${error}\n\nVOICEVOXが起動していることを確認してください。`);
+        speakBtn.textContent = '読み上げ';
+        speakBtn.disabled = false;
+        stopLipSync();
+      }
+    });
+  }
+
   // 記事を開くボタン
   const openLinkBtn = document.getElementById('open-link-btn');
   if (openLinkBtn) {
@@ -52,18 +121,46 @@ function setupEventListeners() {
     });
   }
 
+  // タブ切り替え
+  const tabButtons = document.querySelectorAll('.tab-btn');
+  const tabContents = document.querySelectorAll('.tab-content');
+
+  tabButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetTab = btn.dataset.tab;
+
+      // すべてのタブとコンテンツから active を削除
+      tabButtons.forEach(b => b.classList.remove('active'));
+      tabContents.forEach(c => c.classList.remove('active'));
+
+      // クリックされたタブとそのコンテンツに active を追加
+      btn.classList.add('active');
+      document.getElementById(`${targetTab}-tab`).classList.add('active');
+    });
+  });
+
   // 設定ボタン
   const settingsBtn = document.getElementById('settings-btn');
   const settingsDialog = document.getElementById('settings-dialog');
   const saveSettingsBtn = document.getElementById('save-settings-btn');
   const cancelSettingsBtn = document.getElementById('cancel-settings-btn');
   const rssFeedInput = document.getElementById('rss-feed-input');
+  const qiitaUsernameInput = document.getElementById('qiita-username-input');
+  const zennUsernameInput = document.getElementById('zenn-username-input');
+  const speakerIdInput = document.getElementById('speaker-id-input');
 
   if (settingsBtn) {
     settingsBtn.addEventListener('click', () => {
-      // 現在のRSSフィードURLを表示
+      // 現在の設定を表示
       const currentFeed = localStorage.getItem('rssFeedUrl') || 'https://www.nhk.or.jp/rss/news/cat0.xml';
+      const currentSpeakerId = localStorage.getItem('voicevoxSpeakerId') || '1';
+      const currentQiitaUsername = localStorage.getItem('qiitaUsername') || '';
+      const currentZennUsername = localStorage.getItem('zennUsername') || '';
+
       rssFeedInput.value = currentFeed;
+      speakerIdInput.value = currentSpeakerId;
+      qiitaUsernameInput.value = currentQiitaUsername;
+      zennUsernameInput.value = currentZennUsername;
       settingsDialog.style.display = 'flex';
     });
   }
@@ -71,11 +168,27 @@ function setupEventListeners() {
   if (saveSettingsBtn) {
     saveSettingsBtn.addEventListener('click', () => {
       const newFeedUrl = rssFeedInput.value.trim();
-      if (newFeedUrl) {
-        localStorage.setItem('rssFeedUrl', newFeedUrl);
+      const newSpeakerId = speakerIdInput.value;
+      const newQiitaUsername = qiitaUsernameInput.value.trim();
+      const newZennUsername = zennUsernameInput.value.trim();
+
+      // 保存
+      if (newFeedUrl) localStorage.setItem('rssFeedUrl', newFeedUrl);
+      localStorage.setItem('voicevoxSpeakerId', newSpeakerId);
+      if (newQiitaUsername) localStorage.setItem('qiitaUsername', newQiitaUsername);
+      if (newZennUsername) localStorage.setItem('zennUsername', newZennUsername);
+
+      // アクティブなタブに応じて記事を取得
+      const activeTab = document.querySelector('.tab-btn.active').dataset.tab;
+      if (activeTab === 'rss' && newFeedUrl) {
         fetchRSS(newFeedUrl);
-        settingsDialog.style.display = 'none';
+      } else if (activeTab === 'qiita' && newQiitaUsername) {
+        fetchQiitaArticles(newQiitaUsername);
+      } else if (activeTab === 'zenn' && newZennUsername) {
+        fetchZennArticles(newZennUsername);
       }
+
+      settingsDialog.style.display = 'none';
     });
   }
 
@@ -148,13 +261,214 @@ function displayCurrentArticle() {
 }
 
 function nextArticle() {
-  currentIndex = (currentIndex + 1) % articles.length;
-  displayCurrentArticle();
+  // GIFアニメーションを再生してから記事を切り替え
+  playTransitionAnimation(() => {
+    currentIndex = (currentIndex + 1) % articles.length;
+    displayCurrentArticle();
+  });
 }
 
 function previousArticle() {
-  currentIndex = (currentIndex - 1 + articles.length) % articles.length;
-  displayCurrentArticle();
+  // GIFアニメーションを再生してから記事を切り替え
+  playTransitionAnimation(() => {
+    currentIndex = (currentIndex - 1 + articles.length) % articles.length;
+    displayCurrentArticle();
+  });
+}
+
+// 口パク用画像を読み込む
+async function loadMouthImages(basePath) {
+  mouthImages = [];
+
+  // 画像パスから拡張子を除去してベース名を取得
+  const pathParts = basePath.split('.');
+  const extension = pathParts.pop();
+  const basePathWithoutExt = pathParts.join('.');
+
+  // _mouth1.png, _mouth2.png, _mouth3.png を試行
+  for (let i = 1; i <= 3; i++) {
+    const mouthPath = `${basePathWithoutExt}_mouth${i}.${extension}`;
+    // 画像の存在確認は実際のロード試行で行う（フォールバックとして）
+    mouthImages.push(mouthPath);
+  }
+
+  console.log(`Loaded ${mouthImages.length} mouth animation frames`);
+}
+
+// リップシンクアニメーションを開始
+function startLipSync() {
+  if (mouthImages.length === 0) {
+    console.log('No mouth images available for lip sync');
+    return;
+  }
+
+  const mascotMouth = document.getElementById('mascot-mouth');
+  if (!mascotMouth) return;
+
+  let currentMouthIndex = 0;
+
+  // 口パクアニメーションを開始
+  lipSyncInterval = setInterval(() => {
+    if (mouthImages.length > 0) {
+      mascotMouth.src = `asset://localhost/${mouthImages[currentMouthIndex]}`;
+      mascotMouth.style.display = 'block';
+      currentMouthIndex = (currentMouthIndex + 1) % mouthImages.length;
+    }
+  }, 150); // 150msごとに口の形を変える
+}
+
+// リップシンクアニメーションを停止
+function stopLipSync() {
+  if (lipSyncInterval) {
+    clearInterval(lipSyncInterval);
+    lipSyncInterval = null;
+  }
+
+  const mascotMouth = document.getElementById('mascot-mouth');
+  if (mascotMouth) {
+    mascotMouth.style.display = 'none';
+  }
+}
+
+// 瞬き用画像を読み込む
+function loadBlinkImage(basePath) {
+  blinkImagePath = null;
+
+  // 画像パスから拡張子を除去してベース名を取得
+  const pathParts = basePath.split('.');
+  const extension = pathParts.pop();
+  const basePathWithoutExt = pathParts.join('.');
+
+  // _blink.png を設定
+  blinkImagePath = `${basePathWithoutExt}_blink.${extension}`;
+  console.log(`Loaded blink image: ${blinkImagePath}`);
+}
+
+// 瞬きアニメーションを開始
+function startBlinkAnimation() {
+  if (!blinkImagePath) {
+    console.log('No blink image available');
+    return;
+  }
+
+  const mascotBlink = document.getElementById('mascot-blink');
+  if (!mascotBlink) return;
+
+  // ランダムな間隔で瞬きを行う（2〜5秒ごと）
+  const scheduleNextBlink = () => {
+    const randomInterval = Math.random() * 3000 + 2000; // 2000〜5000ms
+    blinkInterval = setTimeout(() => {
+      performBlink();
+      scheduleNextBlink();
+    }, randomInterval);
+  };
+
+  // 瞬きを実行
+  const performBlink = () => {
+    mascotBlink.src = `asset://localhost/${blinkImagePath}`;
+    mascotBlink.style.display = 'block';
+
+    // 200msで瞬きを終了
+    setTimeout(() => {
+      mascotBlink.style.display = 'none';
+    }, 200);
+  };
+
+  scheduleNextBlink();
+}
+
+// 瞬きアニメーションを停止
+function stopBlinkAnimation() {
+  if (blinkInterval) {
+    clearTimeout(blinkInterval);
+    blinkInterval = null;
+  }
+
+  const mascotBlink = document.getElementById('mascot-blink');
+  if (mascotBlink) {
+    mascotBlink.style.display = 'none';
+  }
+}
+
+// 記事切り替え用GIF画像を読み込む
+function loadTransitionGif(basePath) {
+  transitionGifPath = null;
+
+  // 画像パスから拡張子を除去してベース名を取得
+  const pathParts = basePath.split('.');
+  pathParts.pop(); // 拡張子を削除
+  const basePathWithoutExt = pathParts.join('.');
+
+  // _transition.gif を設定
+  transitionGifPath = `${basePathWithoutExt}_transition.gif`;
+  console.log(`Loaded transition GIF: ${transitionGifPath}`);
+}
+
+// 記事切り替えアニメーションを再生
+function playTransitionAnimation(callback) {
+  if (!transitionGifPath) {
+    console.log('No transition GIF available, skipping animation');
+    if (callback) callback();
+    return;
+  }
+
+  const mascotImage = document.getElementById('mascot-image');
+  if (!mascotImage) {
+    if (callback) callback();
+    return;
+  }
+
+  // 元の画像を保存
+  const originalSrc = mascotImage.src;
+
+  // GIFアニメーションを表示
+  mascotImage.src = `asset://localhost/${transitionGifPath}`;
+
+  // 1秒後に元の画像に戻す
+  setTimeout(() => {
+    mascotImage.src = originalSrc;
+    if (callback) callback();
+  }, 1000);
+}
+
+// ホップアニメーションを開始（アイドル時）
+function startHopAnimation() {
+  const mascotContainer = document.getElementById('mascot-container');
+  if (!mascotContainer) return;
+
+  // 10〜20秒ごとにランダムにホップ
+  const scheduleNextHop = () => {
+    const randomInterval = Math.random() * 10000 + 10000; // 10000〜20000ms
+    hopInterval = setTimeout(() => {
+      performHop();
+      scheduleNextHop();
+    }, randomInterval);
+  };
+
+  // ホップアニメーションを実行
+  const performHop = () => {
+    mascotContainer.style.transition = 'transform 0.3s ease-out';
+    mascotContainer.style.transform = 'translateY(-20px)';
+
+    setTimeout(() => {
+      mascotContainer.style.transform = 'translateY(0)';
+    }, 300);
+  };
+
+  scheduleNextHop();
+}
+
+// ホップアニメーションを停止
+function stopHopAnimation() {
+  if (hopInterval) {
+    clearTimeout(hopInterval);
+    hopInterval = null;
+  }
+
+  const mascotContainer = document.getElementById('mascot-container');
+  if (mascotContainer) {
+    mascotContainer.style.transform = 'translateY(0)';
+  }
 }
 
 // マスコット画像を設定
@@ -168,6 +482,17 @@ function setMascotImage(imagePath) {
     if (defaultMascot) {
       defaultMascot.style.display = 'none';
     }
+
+    // 既存のアニメーションを停止
+    stopBlinkAnimation();
+
+    // 各種アニメーション用画像を読み込む
+    loadMouthImages(imagePath);
+    loadBlinkImage(imagePath);
+    loadTransitionGif(imagePath);
+
+    // 瞬きアニメーションを開始
+    startBlinkAnimation();
   }
 }
 
@@ -198,6 +523,113 @@ async function fetchRSS(feedUrl) {
     console.log(`Loaded ${articles.length} articles`);
   } catch (error) {
     console.error('Failed to fetch RSS:', error);
+  }
+}
+
+// Qiita記事取得機能
+async function fetchQiitaArticles(username) {
+  try {
+    console.log('Fetching Qiita articles for:', username);
+    const fetchedArticles = await invoke('fetch_qiita_articles', { username });
+
+    // 記事を追加
+    articles = fetchedArticles.map(article => ({
+      title: article.title,
+      description: article.description,
+      link: article.link,
+      thumbnailUrl: article.thumbnail_url
+    }));
+
+    currentIndex = 0;
+    displayCurrentArticle();
+    console.log(`Loaded ${articles.length} Qiita articles`);
+  } catch (error) {
+    console.error('Failed to fetch Qiita articles:', error);
+    alert(`Qiita記事の取得に失敗しました: ${error}`);
+  }
+}
+
+// Zenn記事取得機能
+async function fetchZennArticles(username) {
+  try {
+    console.log('Fetching Zenn articles for:', username);
+    const fetchedArticles = await invoke('fetch_zenn_articles', { username });
+
+    // 記事を追加
+    articles = fetchedArticles.map(article => ({
+      title: article.title,
+      description: article.description,
+      link: article.link,
+      thumbnailUrl: article.thumbnail_url
+    }));
+
+    currentIndex = 0;
+    displayCurrentArticle();
+    console.log(`Loaded ${articles.length} Zenn articles`);
+  } catch (error) {
+    console.error('Failed to fetch Zenn articles:', error);
+    alert(`Zenn記事の取得に失敗しました: ${error}`);
+  }
+}
+
+// 天気情報を取得
+async function fetchWeather() {
+  try {
+    console.log('Fetching weather...');
+    const weatherData = await invoke('fetch_weather');
+
+    // 気温を取得
+    const temp = weatherData.current.temperature_2m;
+    const weatherCode = weatherData.current.weathercode;
+
+    // 天気コードを日本語に変換
+    const weatherDescriptions = {
+      0: '快晴',
+      1: '晴れ',
+      2: '晴れ',
+      3: '曇り',
+      45: '霧',
+      48: '霧',
+      51: '小雨',
+      53: '雨',
+      55: '大雨',
+      61: '小雨',
+      63: '雨',
+      65: '大雨',
+      71: '小雪',
+      73: '雪',
+      75: '大雪',
+      77: '雪',
+      80: 'にわか雨',
+      81: 'にわか雨',
+      82: 'にわか雨',
+      85: 'にわか雪',
+      86: 'にわか雪',
+      95: '雷雨',
+      96: '雷雨',
+      99: '雷雨'
+    };
+
+    const weatherDesc = weatherDescriptions[weatherCode] || '不明';
+
+    // UIを更新
+    const tempElement = document.getElementById('weather-temp');
+    const descElement = document.getElementById('weather-desc');
+
+    if (tempElement) {
+      tempElement.textContent = `${Math.round(temp)}°C`;
+    }
+    if (descElement) {
+      descElement.textContent = `東京: ${weatherDesc}`;
+    }
+
+    console.log(`Weather updated: ${temp}°C, ${weatherDesc}`);
+  } catch (error) {
+    console.error('Failed to fetch weather:', error);
+    const descElement = document.getElementById('weather-desc');
+    if (descElement) {
+      descElement.textContent = '天気情報取得失敗';
+    }
   }
 }
 
@@ -238,6 +670,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 保存済みRSSフィードURLまたはデフォルトを取得
   const rssFeedUrl = localStorage.getItem('rssFeedUrl') || 'https://www.nhk.or.jp/rss/news/cat0.xml';
   fetchRSS(rssFeedUrl);
+
+  // 天気情報を取得
+  fetchWeather();
+  // 30分ごとに天気情報を更新
+  setInterval(fetchWeather, 30 * 60 * 1000);
+
+  // ホップアニメーションを開始
+  startHopAnimation();
 
   displayCurrentArticle();
   setupEventListeners();

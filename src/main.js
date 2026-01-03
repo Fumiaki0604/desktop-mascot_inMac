@@ -1,5 +1,6 @@
 // Tauri APIのインポート
 const { invoke } = window.__TAURI__.core;
+const { getCurrentWindow } = window.__TAURI__.window;
 
 // 記事データ
 let articles = [
@@ -20,6 +21,187 @@ let blinkInterval = null;
 let blinkImagePath = null; // 瞬き用画像パス
 let transitionGifPath = null; // 記事切り替え時のGIFパス
 let hopInterval = null; // ホップアニメーション用タイマー
+
+// 各要素の位置を復元
+function restoreElementPositions() {
+  const elements = [
+    { id: 'mascot-container', defaultPos: null },
+    { id: 'bubble-container', defaultPos: null },
+    { id: 'weather-container', defaultPos: null }
+  ];
+
+  // 画面サイズを取得
+  const screenWidth = window.innerWidth;
+  const screenHeight = window.innerHeight;
+
+  elements.forEach(({ id }) => {
+    const element = document.getElementById(id);
+    if (!element) return;
+
+    const savedPos = localStorage.getItem(`${id}-position`);
+    if (savedPos) {
+      const { left, top } = JSON.parse(savedPos);
+
+      // 要素のサイズを取得（まだ配置されていない場合でも取得可能）
+      const rect = element.getBoundingClientRect();
+      const elementWidth = rect.width;
+      const elementHeight = rect.height;
+
+      // 少なくとも50pxは画面内に表示されるようにする
+      const minVisible = 50;
+      let clampedLeft = left;
+      let clampedTop = top;
+
+      // 右側にはみ出している場合
+      if (left > screenWidth - minVisible) {
+        clampedLeft = screenWidth - minVisible;
+      }
+      // 左側にはみ出している場合
+      if (left + elementWidth < minVisible) {
+        clampedLeft = minVisible - elementWidth;
+      }
+      // 下側にはみ出している場合
+      if (top > screenHeight - minVisible) {
+        clampedTop = screenHeight - minVisible;
+      }
+      // 上側にはみ出している場合
+      if (top + elementHeight < minVisible) {
+        clampedTop = minVisible - elementHeight;
+      }
+
+      element.style.left = `${clampedLeft}px`;
+      element.style.top = `${clampedTop}px`;
+    }
+  });
+}
+
+// 各要素の位置を保存
+function saveElementPosition(elementId, left, top) {
+  localStorage.setItem(`${elementId}-position`, JSON.stringify({ left, top }));
+}
+
+// ドラッグ可能エリアの設定（各要素を個別に移動）
+function setupDraggableAreas() {
+  const draggableElements = [
+    { element: document.getElementById('mascot-container'), id: 'mascot-container' },
+    { element: document.getElementById('bubble'), id: 'bubble-container' },
+    { element: document.getElementById('weather-container'), id: 'weather-container' }
+  ];
+
+  let currentDragging = null;
+  let startMousePos = { x: 0, y: 0 };
+  let startElementPos = { left: 0, top: 0 };
+
+  draggableElements.forEach(({ element, id }) => {
+    if (!element) return;
+
+    element.addEventListener('mousedown', (e) => {
+      // ボタンや入力フィールド、リンクのクリックは無視
+      if (e.target.tagName === 'BUTTON' ||
+          e.target.tagName === 'INPUT' ||
+          e.target.tagName === 'A' ||
+          e.target.closest('#settings-dialog') ||
+          e.target.closest('#context-menu')) {
+        return;
+      }
+
+      currentDragging = { element, id };
+      startMousePos = { x: e.clientX, y: e.clientY };
+
+      // 要素の親コンテナを取得（bubble の場合は bubble-container）
+      const container = id === 'bubble-container'
+        ? document.getElementById('bubble-container')
+        : element;
+
+      const rect = container.getBoundingClientRect();
+      startElementPos = {
+        left: rect.left,
+        top: rect.top
+      };
+
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!currentDragging) return;
+
+    const deltaX = e.clientX - startMousePos.x;
+    const deltaY = e.clientY - startMousePos.y;
+
+    const newLeft = startElementPos.left + deltaX;
+    const newTop = startElementPos.top + deltaY;
+
+    // 要素の親コンテナを移動
+    const container = currentDragging.id === 'bubble-container'
+      ? document.getElementById('bubble-container')
+      : currentDragging.element;
+
+    container.style.left = `${newLeft}px`;
+    container.style.top = `${newTop}px`;
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (currentDragging) {
+      // 位置を保存
+      const container = currentDragging.id === 'bubble-container'
+        ? document.getElementById('bubble-container')
+        : currentDragging.element;
+
+      const rect = container.getBoundingClientRect();
+      saveElementPosition(currentDragging.id, rect.left, rect.top);
+    }
+    currentDragging = null;
+  });
+
+  // ウィンドウ全体のドラッグ（背景部分）
+  document.body.addEventListener('mousedown', async (e) => {
+    // 要素上でのクリックは無視
+    if (e.target !== document.body && e.target.id !== 'app') {
+      return;
+    }
+
+    let isDragging = true;
+    const startMousePos = { x: e.screenX, y: e.screenY };
+    let startWindowPos = { x: 0, y: 0 };
+
+    try {
+      const position = await invoke('get_window_position');
+      startWindowPos = { x: position[0], y: position[1] };
+    } catch (error) {
+      console.error('Failed to get window position:', error);
+      return;
+    }
+
+    const onMouseMove = async (e) => {
+      if (!isDragging) return;
+
+      const deltaX = e.screenX - startMousePos.x;
+      const deltaY = e.screenY - startMousePos.y;
+
+      const newX = startWindowPos.x + deltaX;
+      const newY = startWindowPos.y + deltaY;
+
+      try {
+        await invoke('set_window_position', { x: newX, y: newY });
+      } catch (error) {
+        console.error('Failed to set window position:', error);
+      }
+    };
+
+    const onMouseUp = () => {
+      isDragging = false;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+
+    e.preventDefault();
+  });
+}
 
 function setupEventListeners() {
   // 読み上げボタン
@@ -98,7 +280,8 @@ function setupEventListeners() {
   const bubble = document.getElementById('bubble');
   if (bubble) {
     bubble.addEventListener('click', (e) => {
-      if (e.target.id !== 'open-link-btn') {
+      // ボタンクリックの場合は記事切り替えしない
+      if (e.target.tagName !== 'BUTTON') {
         nextArticle();
       }
     });
@@ -391,16 +574,9 @@ function stopBlinkAnimation() {
 }
 
 // 記事切り替え用GIF画像を読み込む
-function loadTransitionGif(basePath) {
-  transitionGifPath = null;
-
-  // 画像パスから拡張子を除去してベース名を取得
-  const pathParts = basePath.split('.');
-  pathParts.pop(); // 拡張子を削除
-  const basePathWithoutExt = pathParts.join('.');
-
-  // _transition.gif を設定
-  transitionGifPath = `${basePathWithoutExt}_transition.gif`;
+function loadTransitionGif() {
+  // 常に image/voidoll.gif を使用
+  transitionGifPath = 'image/voidoll.gif';
   console.log(`Loaded transition GIF: ${transitionGifPath}`);
 }
 
@@ -412,21 +588,32 @@ function playTransitionAnimation(callback) {
     return;
   }
 
-  const mascotImage = document.getElementById('mascot-image');
-  if (!mascotImage) {
+  const transitionGif = document.getElementById('transition-gif');
+  if (!transitionGif) {
+    console.log('transition-gif element not found');
     if (callback) callback();
     return;
   }
 
-  // 元の画像を保存
-  const originalSrc = mascotImage.src;
+  // 元のマスコット画像とデフォルトマスコットを一時的に非表示
+  const mascotImage = document.getElementById('mascot-image');
+  const defaultMascot = document.getElementById('default-mascot');
+  const originalMascotDisplay = mascotImage ? mascotImage.style.display : 'none';
+  const originalDefaultDisplay = defaultMascot ? defaultMascot.style.display : 'flex';
+
+  if (mascotImage) mascotImage.style.display = 'none';
+  if (defaultMascot) defaultMascot.style.display = 'none';
 
   // GIFアニメーションを表示
-  mascotImage.src = `asset://localhost/${transitionGifPath}`;
+  console.log('Playing transition animation:', transitionGifPath);
+  transitionGif.src = transitionGifPath; // 相対パスで直接読み込み
+  transitionGif.style.display = 'block';
 
-  // 1秒後に元の画像に戻す
+  // 1秒後にGIFを非表示にして元の画像を復元
   setTimeout(() => {
-    mascotImage.src = originalSrc;
+    transitionGif.style.display = 'none';
+    if (mascotImage) mascotImage.style.display = originalMascotDisplay;
+    if (defaultMascot) defaultMascot.style.display = originalDefaultDisplay;
     if (callback) callback();
   }, 1000);
 }
@@ -489,7 +676,7 @@ function setMascotImage(imagePath) {
     // 各種アニメーション用画像を読み込む
     loadMouthImages(imagePath);
     loadBlinkImage(imagePath);
-    loadTransitionGif(imagePath);
+    loadTransitionGif();
 
     // 瞬きアニメーションを開始
     startBlinkAnimation();
@@ -661,11 +848,16 @@ async function restoreWindowPosition() {
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('Desktop Mascot loaded');
 
-  // ウィンドウ位置を復元
-  await restoreWindowPosition();
+  // 位置情報をクリア（デバッグ用）
+  localStorage.removeItem('mascot-container-position');
+  localStorage.removeItem('bubble-container-position');
+  localStorage.removeItem('weather-container-position');
 
   // 保存済みマスコット画像を復元
   restoreMascotImage();
+
+  // トランジションGIFを読み込み
+  loadTransitionGif();
 
   // 保存済みRSSフィードURLまたはデフォルトを取得
   const rssFeedUrl = localStorage.getItem('rssFeedUrl') || 'https://www.nhk.or.jp/rss/news/cat0.xml';
@@ -681,11 +873,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   displayCurrentArticle();
   setupEventListeners();
-
-  // ウィンドウ移動時に位置を保存
-  let saveTimer;
-  window.addEventListener('mousemove', () => {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(saveWindowPosition, 1000);
-  });
+  setupDraggableAreas();
+  restoreElementPositions();
 });

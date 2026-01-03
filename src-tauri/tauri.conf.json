@@ -12,11 +12,10 @@
     "windows": [
       {
         "title": "Desktop Mascot",
-        "width": 800,
-        "height": 400,
+        "fullscreen": true,
         "decorations": false,
         "transparent": true,
-        "alwaysOnTop": true,
+        "alwaysOnTop": false,
         "resizable": false,
         "skipTaskbar": true
       }

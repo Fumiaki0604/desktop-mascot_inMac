@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Bubble</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body {
+      background: transparent;
+      overflow: visible;
+      margin: 0;
+      padding: 0;
+    }
+    #bubble-container {
+      position: relative;
+      width: 400px;
+      cursor: move;
+    }
+    #bubble {
+      background: rgba(0, 0, 0, 0.85);
+      border: 2px solid rgba(100, 100, 100, 0.8);
+      border-radius: 15px;
+      padding: 15px;
+      min-height: 150px;
+      display: flex;
+      flex-direction: column;
+    }
+    #bubble-content {
+      display: flex;
+      gap: 10px;
+      flex: 1;
+      margin-bottom: 10px;
+    }
+    #thumbnail-container {
+      width: 100px;
+      height: 80px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 5px;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    #thumbnail-container img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    #text-container {
+      flex: 1;
+      display: flex;
+      align-items: flex-start;
+    }
+    #article-text {
+      color: white;
+      font-size: 13px;
+      line-height: 1.5;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 6;
+      -webkit-box-orient: vertical;
+    }
+    #bubble-buttons {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      -webkit-app-region: no-drag;
+    }
+    #bubble-buttons button {
+      font-weight: bold;
+      padding: 5px 12px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 11px;
+      border: 2px solid;
+    }
+    #speak-btn {
+      background: rgba(100, 150, 255, 1);
+      border-color: rgba(80, 130, 235, 1);
+      color: white;
+    }
+    #open-link-btn {
+      background: rgba(0, 255, 0, 1);
+      border-color: rgba(0, 200, 0, 1);
+      color: black;
+    }
+  </style>
+</head>
+<body data-tauri-drag-region>
+  <div id="bubble-container">
+    <div id="bubble">
+      <div id="bubble-content">
+        <div id="thumbnail-container"></div>
+        <div id="text-container">
+          <div id="article-text">デスクトップマスコットへようこそ</div>
+        </div>
+      </div>
+      <div id="bubble-buttons">
+        <button id="speak-btn">読み上げ</button>
+        <button id="open-link-btn">記事を開く</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="bubble.js" type="module"></script>
+</body>
+</html>

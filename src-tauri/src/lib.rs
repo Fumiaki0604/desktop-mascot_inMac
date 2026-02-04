@@ -7,6 +7,7 @@ struct Article {
     description: String,
     link: String,
     thumbnail_url: String,
+    source: String,
 }
 
 // RSS取得コマンド
@@ -33,6 +34,10 @@ async fn fetch_rss_internal(feed_url: &str) -> Result<Vec<Article>, Box<dyn Erro
 
     // RSSをパース
     let feed = feed_rs::parser::parse(&content[..])?;
+
+    let feed_title = feed.title.as_ref()
+        .map(|t| t.content.clone())
+        .unwrap_or_else(|| feed_url.to_string());
 
     // 記事を変換
     let articles: Vec<Article> = feed
@@ -64,6 +69,7 @@ async fn fetch_rss_internal(feed_url: &str) -> Result<Vec<Article>, Box<dyn Erro
                 description,
                 link,
                 thumbnail_url,
+                source: feed_title.clone(),
             }
         })
         .collect();
@@ -225,6 +231,7 @@ async fn fetch_qiita_articles(username: String) -> Result<Vec<Article>, String> 
                 description,
                 link: url,
                 thumbnail_url: String::new(),
+                source: "Qiita".to_string(),
             });
         }
     }

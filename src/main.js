@@ -8,13 +8,16 @@ let articles = [
     title: 'デスクトップマスコットへようこそ',
     description: 'Tauri版デスクトップマスコットが起動しました。RSSフィードを設定すると記事が表示されます。',
     link: '',
-    thumbnailUrl: ''
+    thumbnailUrl: '',
+    source: 'アプリ'
   }
 ];
 let currentIndex = 0;
 
 // 音声再生用のAudioコンテキスト
 let currentAudio = null;
+let autoAdvanceInterval = null;
+const AUTO_ADVANCE_MS = 20000;
 let lipSyncInterval = null;
 let mouthImages = []; // 口パク用画像パスのリスト
 let blinkInterval = null;
@@ -429,6 +432,9 @@ function displayCurrentArticle() {
   if (article.description) {
     displayText += '\n\n' + article.description;
   }
+  if (article.source) {
+    displayText += '\n\n出典: ' + article.source;
+  }
   articleText.textContent = displayText;
 
   // サムネイル表示
@@ -449,6 +455,7 @@ function nextArticle() {
     currentIndex = (currentIndex + 1) % articles.length;
     displayCurrentArticle();
   });
+  resetAutoAdvance();
 }
 
 function previousArticle() {
@@ -457,6 +464,34 @@ function previousArticle() {
     currentIndex = (currentIndex - 1 + articles.length) % articles.length;
     displayCurrentArticle();
   });
+  resetAutoAdvance();
+}
+
+function startAutoAdvance() {
+  if (articles.length <= 1) {
+    stopAutoAdvance();
+    return;
+  }
+  stopAutoAdvance();
+  autoAdvanceInterval = setInterval(() => {
+    if (articles.length <= 1) return;
+    nextArticle();
+  }, AUTO_ADVANCE_MS);
+}
+
+function stopAutoAdvance() {
+  if (autoAdvanceInterval) {
+    clearInterval(autoAdvanceInterval);
+    autoAdvanceInterval = null;
+  }
+}
+
+function resetAutoAdvance() {
+  if (autoAdvanceInterval) {
+    clearInterval(autoAdvanceInterval);
+    autoAdvanceInterval = null;
+  }
+  startAutoAdvance();
 }
 
 // 口パク用画像を読み込む
@@ -702,11 +737,13 @@ async function fetchRSS(feedUrl) {
       title: article.title,
       description: article.description,
       link: article.link,
-      thumbnailUrl: article.thumbnail_url
+      thumbnailUrl: article.thumbnail_url,
+      source: article.source
     }));
 
     currentIndex = 0;
     displayCurrentArticle();
+    startAutoAdvance();
     console.log(`Loaded ${articles.length} articles`);
   } catch (error) {
     console.error('Failed to fetch RSS:', error);
@@ -724,11 +761,13 @@ async function fetchQiitaArticles(username) {
       title: article.title,
       description: article.description,
       link: article.link,
-      thumbnailUrl: article.thumbnail_url
+      thumbnailUrl: article.thumbnail_url,
+      source: article.source
     }));
 
     currentIndex = 0;
     displayCurrentArticle();
+    startAutoAdvance();
     console.log(`Loaded ${articles.length} Qiita articles`);
   } catch (error) {
     console.error('Failed to fetch Qiita articles:', error);
@@ -747,11 +786,13 @@ async function fetchZennArticles(username) {
       title: article.title,
       description: article.description,
       link: article.link,
-      thumbnailUrl: article.thumbnail_url
+      thumbnailUrl: article.thumbnail_url,
+      source: article.source
     }));
 
     currentIndex = 0;
     displayCurrentArticle();
+    startAutoAdvance();
     console.log(`Loaded ${articles.length} Zenn articles`);
   } catch (error) {
     console.error('Failed to fetch Zenn articles:', error);
